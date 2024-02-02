@@ -2,12 +2,11 @@
 import requests
 from bs4 import BeautifulSoup
 from sqlalchemy import create_engine, Column, Integer, String
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, declarative_base
 
-BASE_URL = 'https://www.freeimages.com/search/dogs'
+BASE_URL = 'https://www.freeimages.com'
 
-engine = create_engine('sqlite:///dogs.db', echo=True)
+engine = create_engine('sqlite:///dogs.db')
 Base = declarative_base()
 
 class Dog(Base):
@@ -28,33 +27,43 @@ def create_database_tables():
 def get_dog_urls():
     """Scrapes the url in order to get the dogs urls"""
     dog_urls = []
-    page_number = 0
 
-    while (len(dog_urls) < 1000):
-        print(f'Scrapping page number {page_number}...')
-        page = requests.get(f'{BASE_URL}/{page_number}')
-        soup = BeautifulSoup(page.content, 'html.parser')
+    search_urls = [f'{BASE_URL}/search/dogs', f'{BASE_URL}/illustrations/dogs']
 
-        istock_top_container = soup.find(id='istock-block-top')
-        images_container = istock_top_container.find_next_siblings()[0] 
+    for idx, search_url in enumerate(search_urls):
+        page_number = 1
 
-        pictures = images_container.find_all(
-            'img',
-            {
-                'src': lambda x: x and x.startswith('https://images') and 'banner' not in x
-            }
-        )
+        image_type = 'photos'
+        if (idx == 1):
+            image_type = 'illustrations'
+        print(f'Searching for dog {image_type}')
 
-        prev_len = len(dog_urls)
+        while (len(dog_urls) < 1000):
 
-        for picture in pictures:
-            dog_urls.append(picture['src'])
-        page_number += 1
+            print(f'Scrapping page number {page_number}...')
+            page = requests.get(f'{search_url}/{page_number}')
+            soup = BeautifulSoup(page.content, 'html.parser')
 
-        if (prev_len == len(dog_urls)):
-            break
+            istock_top_container = soup.find(id='istock-block-top')
+            images_container = istock_top_container.find_next_siblings()[0] 
 
-    return dog_urls
+            pictures = images_container.find_all(
+                'img',
+                {
+                    'src': lambda x: x and x.startswith('https://images') and 'banner' not in x
+                }
+            )
+
+            prev_len = len(dog_urls)
+
+            for picture in pictures:
+                dog_urls.append(picture['src'])
+            page_number += 1
+
+            if (prev_len == len(dog_urls)):
+                break
+
+    return dog_urls[:1000]
 
 
 def main():
@@ -72,6 +81,7 @@ def main():
     Session.configure(bind=engine)
     session = Session()
     session.add_all(dogs)
+    print('Storing values...')
     session.commit()
 
 if __name__ == "__main__":
